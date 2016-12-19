@@ -259,3 +259,187 @@ dasherize('The world is a vampire');
 ```
 
 `trace` 函数允许我们在某个特定的点观察数据以便 debug。像 haskell 和 purescript 之类的语言出于开发的方便，也都提供了类似的函数。
+
+> However, it does offer a different style of coding, a style that's taken for granted in purely functional programming languages: Ramda makes it simple for you to build complex logic through functional composition. Note that any library with a compose function will allow you do functional composition; the real point here is: "makes it simple".
+
+## 异步任务
+
+回调（callback）是通往地狱的狭窄的螺旋阶梯。使用 Quildreen Motta 的 [Folktale](http://folktalejs.org/) 里的 `Data.Task`
+
+```js
+// Node readfile example:
+//=======================
+
+var fs = require('fs');
+
+//  readFile :: String -> Task(Error, JSON)
+var readFile = function(filename) {
+  return new Task(function(reject, result) {
+    fs.readFile(filename, 'utf-8', function(err, data) {
+      err ? reject(err) : result(data);
+    });
+  });
+};
+
+readFile("metamorphosis").map(split('\n')).map(head);
+// Task("One morning, as Gregor Samsa was waking up from anxious dreams, he discovered that
+// in bed he had been changed into a monstrous verminous bug.")
+
+
+// jQuery getJSON example:
+//========================
+
+//  getJSON :: String -> {} -> Task(Error, JSON)
+var getJSON = curry(function(url, params) {
+  return new Task(function(reject, result) {
+    $.getJSON(url, params, result).fail(reject);
+  });
+});
+
+getJSON('/video', {id: 10}).map(_.prop('title'));
+// Task("Family Matters ep 15")
+
+// 传入普通的实际值也没问题
+Task.of(3).map(function(three){ return three + 1 });
+// Task(4)
+```
+
+例子中的 `reject` 和 `result` 函数分别是失败和成功的回调。正如你看到的，我们只是简单地调用 `Task` 的 `map` 函数，就能操作将来的值，好像这个值就在那儿似的。到现在 `map` 对你来说应该不稀奇了。
+
+如果熟悉 promise 的话，你该能认出来 `map` 就是 `then`，`Task` 就是一个 promise。如果不熟悉你也不必气馁，反正我们也不会用它，因为它并不纯；但刚才的类比还是成立的。
+
+与 `IO` 类似，`Task` 在我们给它绿灯之前是不会运行的。事实上，正因为它要等我们的命令，`IO` 实际就被纳入到了 `Task` 名下，代表所有的异步操作——`readFile` 和 `getJSON` 并不需要一个额外的 `IO` 容器来变纯。更重要的是，当我们调用它的 `map` 的时候，`Task` 工作的方式与 `IO` 几无差别：都是把对未来的操作的指示放在一个时间胶囊里，就像家务列表（chore chart）那样——真是一种精密的拖延术。
+
+## 一点理论
+
+前面提到，functor 的概念来自于范畴学，并满足一些定律。我们先来探索这些实用的定律。
+
+```js
+// identity
+map(id) === id;
+
+// composition
+compose(map(f), map(g)) === map(compose(f, g));
+```
+
+## 总结
+
+我们已经认识了几个不同的 functor，但它们的数量其实是无限的。有一些值得注意的可迭代数据类型（iterable data structure）我们没有介绍，像 tree、list、map 和 pair 等，以及所有你能说出来的。eventstream 和 observable 也都是 functor。
+
+## chain 函数
+
+`chain` 可以轻松地嵌套多个作用，因此我们就能以一种纯函数式的方式来表示 *序列*（sequence） 和 *变量赋值*（variable assignment）。
+
+```js
+// getJSON :: Url -> Params -> Task JSON
+// querySelector :: Selector -> IO DOM
+
+
+getJSON('/authenticate', {username: 'stale', password: 'crackers'})
+  .chain(function(user) {
+    return getJSON('/friends', {user_id: user.id});
+});
+// Task([{name: 'Seimith', id: 14}, {name: 'Ric', id: 39}]);
+
+
+querySelector("input.username").chain(function(uname) {
+  return querySelector("input.email").chain(function(email) {
+    return IO.of(
+      "Welcome " + uname.value + " " + "prepare for spam at " + email.value
+    );
+  });
+});
+// IO("Welcome Olivia prepare for spam at olivia@tremorcontrol.net");
+
+
+Maybe.of(3).chain(function(three) {
+  return Maybe.of(2).map(add(three));
+});
+// Maybe(5);
+
+
+Maybe.of(null).chain(safeProp('address')).chain(safeProp('street'));
+// Maybe(null);
+```
+
+```
+querySelector("input.username").chain(function(uname) {
+  return querySelector("input.email").map(function(email) {
+      return "Welcome" + uname.value + " prepare for spam at " + email.value;
+  });
+});
+```
+
+> 返回的如果是"普通值"就用`map`，如果是`functor`就用`chain`。
+
+### 等式推导（equational reasoning）
+### 可靠特性(reliable properties)
+
+```
+// upload :: String -> (String -> a) -> Void
+var upload = function(filename, callback) {
+  if(!filename) {
+    throw "You need a filename!";
+  } else {
+    readFile(filename, function(err, contents) {
+        if(err) throw err;
+        httpPost(contents, function(err, json) {
+            if(err) throw err;
+            callback(json);
+        });
+    });
+  }
+}
+```
+
+```
+函数式编程
+// readFile :: Filename -> Either String （Future Error String）
+// httpPost :: String -> Futrue Error JSON
+
+// upload :: String -> Either String (Futrue Error JSON)
+var upload = compose(map(chain(httpPost('/uploads'))), readFile);
+```
+
+# 函数式编程理论
+
+```
+// 结合律
+compose(join, map(join)) == compose(join, join)
+```
+
+这个定律表明了monad的嵌套本质，
+
+ - join
+ - map
+ - compose
+ - curry
+
+```
+// 同一律
+compose(join, of) == compose(join, map(of)) == id
+```
+
+    对任意的monad `M` `of` 和`join`相当与`id`，也可以使用`map(of)`由内而外实现相同效果。
+    这个定律叫“三角同一律”（triangle identity）。
+
+```
+var mcompose = function(f, g) {
+  return compose(chain(f), chain(g));
+}
+
+// 左同一律
+mcompose(M, f) == f
+
+// 右同一律
+mcompose(f, M) == f
+
+// 结合律
+mcompose(mcompose(f, g), h) == mcompose(f, mcompose(g, h))
+```
+
+monad 来自于一个叫 “Kleisli 范畴”的范畴，这个范畴里边所有的对象都是 monad，所有的态射都是联结函数（chained funtions）。
+
+## 总结
+
+monad 让我们深入到嵌套的运算当中，使我们能够在完全避免回调金字塔（pyramid of doom）情况下，为变量赋值，运行有序的作用，执行异步任务等等。当一个值被困在几层相同类型的容器中时，monad 能够拯救它。借助 “pointed” 这个可靠的帮手，monad 能够借给我们从盒子中取出的值，而且知道我们会在结束使用后还给它。
