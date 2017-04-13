@@ -1,0 +1,54 @@
+(subseq
+  (sort
+    (remove-if-not
+      (lambda (x) (member 'nosql' (article-tags x)))
+      (some-articles))
+    (lambda (a b) (> (article-words a)(article-words b)))
+  )
+0 3)
+
+(->> (articles)
+  (filter #(some #{:nosql} (: tags %)))
+  (sort-by :words >)
+  (take 3)
+)
+
+[1,2,3].map{|i| i * i} #=> [1,4,9]
+
+[1,2,3].reduce{ |acc, each| acc + each} # =>6
+
+some-articles
+  .map{|a| a.words}
+  .reduce {|acc, w| acc + w}
+
+some-articles
+  .group_by {|a| a.type}
+  .map {|key, value| [key, value.size]}
+
+(->> (articles)
+    (group_by :type)
+    (map (fn [[k, v]] [k (count v)]))
+    (into {})
+)
+
+(defn index-by [f, seq]
+  (->> seq
+      (mapcat #(map (fn [key] [key %]) (f %)))
+      (group_by first)
+      (map (fn [[k,v]] [k (map last v)]))
+  )
+)
+
+(defn total-words [articles]
+    (reduce + (map :words articles)))
+
+(->> (articles)
+      (index-by :tags)
+      (map (fn [[k,v]] {k {:articles (count v), :word (total-words v)}}))
+      (into {}))
+
+articles.stream()
+  .filter(a -> a.getTags().contains("nosql"))
+  .sorted(Comparator .comparing(Article :: getWords).reversed())
+  .limit(3)
+  .collection(toList())

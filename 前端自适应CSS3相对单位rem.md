@@ -35,7 +35,7 @@ h1{
 4. 设置viewport进行缩放
 
 ```
-  <meta name="viewprt" content="width=320,maximun-scale=1.3,user-scalable=no">
+<meta name="viewprt" content="width=320,maximun-scale=1.3,user-scalable=no">
 ```
 
 例如：可以以320宽度为基准，进行缩放
@@ -63,3 +63,7 @@ h1{
 rem使用的浏览器兼容性
 
 ![](images/1418894538.png)
+
+常用的rem 单位换算
+
+![](images/2013628105651693.png)
